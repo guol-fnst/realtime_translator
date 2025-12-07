@@ -1,0 +1,22 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Virtual Environment
+venv/
+env/
+.env
+
+# PyInstaller
+build/
+dist/
+*.spec
+
+# IDE
+.vscode/
+.idea/
+.gemini/
+
+# Logs
+*.log
