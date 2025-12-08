@@ -16,7 +16,9 @@ class AudioCapture:
     
     def __init__(self, sample_rate: int = 16000, chunk_duration: float = 3.0,
                  silence_threshold: int = 300, silence_duration: float = 0.6,
-                 max_buffer_duration: float = 15.0, min_speech_duration: float = 0.5):
+                 max_buffer_duration: float = 15.0, min_speech_duration: float = 0.5,
+                 use_vad: bool = True, vad_aggressiveness: int = 2,
+                 enable_normalization: bool = True, normalization_target: int = 30000):
         """
         初始化音频捕获器
         
@@ -53,6 +55,20 @@ class AudioCapture:
         self._silence_samples = 0  # 连续静音采样数
         self._speech_started = False  # 是否检测到语音开始
         self._speech_samples = 0  # 语音采样数
+        self._use_vad = False
+        self.vad_aggressiveness = vad_aggressiveness
+        self._vad = None
+        self._vad_frame_len_samples = int(self.sample_rate * 0.02)
+        self._vad_buffer = np.array([], dtype=np.int16)
+        self.enable_normalization = enable_normalization
+        self.normalization_target = normalization_target
+        if use_vad:
+            try:
+                import webrtcvad
+                self._vad = webrtcvad.Vad(vad_aggressiveness)
+                self._use_vad = True
+            except Exception:
+                self._use_vad = False
         
     def _init_audio(self):
         """初始化 PyAudioWPatch"""
@@ -223,9 +239,31 @@ class AudioCapture:
                 if self._device_sample_rate != self.sample_rate:
                     audio_data = self._resample(audio_data, self._device_sample_rate, self.sample_rate)
                 
-                # 计算当前块的音量
-                current_volume = np.abs(audio_data).mean()
-                is_silence = current_volume < self.silence_threshold
+                if self.enable_normalization:
+                    m = audio_data.mean()
+                    audio_data = (audio_data - m).astype(np.int16)
+                    peak = np.max(np.abs(audio_data))
+                    if peak > 0:
+                        scale = self.normalization_target / peak
+                        if scale < 1.0:
+                            audio_data = np.clip(audio_data.astype(np.float32) * scale, -32768, 32767).astype(np.int16)
+                
+                speech_in_chunk = False
+                if self._use_vad:
+                    self._vad_buffer = np.concatenate((self._vad_buffer, audio_data))
+                    while len(self._vad_buffer) >= self._vad_frame_len_samples:
+                        frame = self._vad_buffer[:self._vad_frame_len_samples]
+                        self._vad_buffer = self._vad_buffer[self._vad_frame_len_samples:]
+                        frame_bytes = frame.tobytes()
+                        try:
+                            if self._vad.is_speech(frame_bytes, self.sample_rate):
+                                speech_in_chunk = True
+                        except Exception:
+                            pass
+                    is_silence = not speech_in_chunk
+                else:
+                    current_volume = np.abs(audio_data).mean()
+                    is_silence = current_volume < self.silence_threshold
                 
                 # 添加到缓冲区
                 self._buffer.append(audio_data)
@@ -261,10 +299,17 @@ class AudioCapture:
                 print(f"处理音频出错: {e}")
     
     def _resample(self, audio: np.ndarray, src_rate: int, dst_rate: int) -> np.ndarray:
-        """简单的重采样（线性插值）"""
+        """重采样"""
         if src_rate == dst_rate:
             return audio
         
+        if src_rate % dst_rate == 0:
+            factor = src_rate // dst_rate
+            kernel_size = max(8 * factor, 16)
+            window = np.hamming(kernel_size)
+            filtered = np.convolve(audio.astype(np.float32), window / window.sum(), mode='same')
+            down = filtered[::factor]
+            return np.clip(down, -32768, 32767).astype(np.int16)
         duration = len(audio) / src_rate
         target_length = int(duration * dst_rate)
         indices = np.linspace(0, len(audio) - 1, target_length)

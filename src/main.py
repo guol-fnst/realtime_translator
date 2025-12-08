@@ -64,7 +64,11 @@ class TranslatorApp:
             silence_threshold=self.config.silence_threshold,
             silence_duration=self.config.silence_duration,
             max_buffer_duration=self.config.max_buffer_duration,
-            min_speech_duration=self.config.min_speech_duration
+            min_speech_duration=self.config.min_speech_duration,
+            use_vad=self.config.vad_enabled,
+            vad_aggressiveness=self.config.vad_aggressiveness,
+            enable_normalization=self.config.enable_normalization,
+            normalization_target=self.config.normalization_target
         )
         
         # 字幕窗口

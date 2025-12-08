@@ -18,8 +18,8 @@ class Config:
     ollama_api_url: str = "http://192.168.168.130:11434/api/chat"  # 直接调用Ollama
     
     # 模型设置
-    translation_model: str = "qwen2.5:14b"
-    whisper_model: str = "large-v3"
+    translation_model: str = "qwen2.5:7b"  # 改为 7B 模型以降低延迟
+    whisper_model: str = "medium"  # 改为 medium 模型以提高识别速度
     source_language: str = "ja"  # 日语
     target_language: str = "zh"  # 中文
     
@@ -30,6 +30,10 @@ class Config:
     silence_duration: float = 0.6  # 静音持续多久触发发送
     max_buffer_duration: float = 15.0  # 最大缓冲时长
     min_speech_duration: float = 0.5  # 最小语音时长
+    vad_enabled: bool = True
+    vad_aggressiveness: int = 2
+    enable_normalization: bool = True
+    normalization_target: int = 30000
     
     # 字幕设置
     subtitle_font_size: int = 24

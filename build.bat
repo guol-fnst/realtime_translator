@@ -28,6 +28,7 @@ pyinstaller --noconfirm --onefile --windowed ^
     --hidden-import gpu_monitor ^
     --hidden-import pynvml ^
     --hidden-import websockets ^
+    --hidden-import webrtcvad ^
     src\main.py
 
 if errorlevel 1 (
