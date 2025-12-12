@@ -18,7 +18,8 @@ class AudioCapture:
                  silence_threshold: int = 300, silence_duration: float = 0.6,
                  max_buffer_duration: float = 15.0, min_speech_duration: float = 0.5,
                  use_vad: bool = True, vad_aggressiveness: int = 2,
-                 enable_normalization: bool = True, normalization_target: int = 30000):
+                 enable_normalization: bool = True, normalization_target: int = 30000,
+                 force_flush_interval: float = 1.5):
         """
         初始化音频捕获器
         
@@ -62,6 +63,8 @@ class AudioCapture:
         self._vad_buffer = np.array([], dtype=np.int16)
         self.enable_normalization = enable_normalization
         self.normalization_target = normalization_target
+        self.force_flush_interval = force_flush_interval
+        self._last_flush_time = time.time()
         if use_vad:
             try:
                 import webrtcvad
@@ -292,6 +295,13 @@ class AudioCapture:
                         self._flush_buffer_smart()
                     else:
                         self._clear_buffer()
+                else:
+                    if self._speech_started:
+                        if (time.time() - self._last_flush_time) >= self.force_flush_interval:
+                            if self._speech_samples >= min_speech_samples:
+                                self._flush_buffer_smart()
+                            else:
+                                self._clear_buffer()
                     
             except queue.Empty:
                 continue
@@ -322,6 +332,7 @@ class AudioCapture:
         self._silence_samples = 0
         self._speech_started = False
         self._speech_samples = 0
+        self._last_flush_time = time.time()
     
     def _flush_buffer_smart(self):
         """智能刷新缓冲区 - 去除尾部静音"""
@@ -349,6 +360,7 @@ class AudioCapture:
                 self._callback(wav_data)
             except Exception as e:
                 print(f"回调出错: {e}")
+        self._last_flush_time = time.time()
     
     def _trim_silence(self, audio_data: np.ndarray, threshold: int = None) -> np.ndarray:
         """去除音频尾部的静音"""
@@ -399,6 +411,24 @@ class AudioCapture:
             self._thread = None
         
         print("音频捕获已停止")
+
+    def update_dynamic_params(self, silence_duration: float = None,
+                               max_buffer_duration: float = None,
+                               force_flush_interval: float = None,
+                               vad_aggressiveness: int = None):
+        if silence_duration is not None:
+            self.silence_duration = silence_duration
+        if max_buffer_duration is not None:
+            self.max_buffer_duration = max_buffer_duration
+        if force_flush_interval is not None:
+            self.force_flush_interval = force_flush_interval
+        if vad_aggressiveness is not None and self._vad is not None:
+            try:
+                import webrtcvad
+                self._vad = webrtcvad.Vad(vad_aggressiveness)
+                self.vad_aggressiveness = vad_aggressiveness
+            except Exception:
+                pass
 
 
 # 测试代码

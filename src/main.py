@@ -46,6 +46,12 @@ class TranslatorApp:
         # 状态
         self._running = False
         self._processing = False
+        self._metrics = {
+            'rec_times': [],
+            'fail_count': 0,
+            'success_count': 0,
+            'durations': []
+        }
         
     def _init_components(self):
         """初始化组件"""
@@ -96,12 +102,30 @@ class TranslatorApp:
         try:
             # 更新状态
             self.subtitle_overlay.update_status("🔄 正在识别...")
+            import io, wave
+            try:
+                b = io.BytesIO(audio_data)
+                with wave.open(b, 'rb') as w:
+                    frames = w.getnframes()
+                    rate = w.getframerate()
+                    duration = frames / max(rate, 1)
+                self._metrics['durations'].append(duration)
+                if len(self._metrics['durations']) > 100:
+                    self._metrics['durations'] = self._metrics['durations'][-100:]
+            except Exception:
+                pass
+            t0 = time.time()
             
             # 语音识别
             text, language = self.speech_recognizer.transcribe(audio_data)
+            t1 = time.time()
+            self._metrics['rec_times'].append(int((t1 - t0) * 1000))
+            if len(self._metrics['rec_times']) > 100:
+                self._metrics['rec_times'] = self._metrics['rec_times'][-100:]
             
             if text:
                 print(f"[识别] {text}")
+                self._metrics['success_count'] += 1
                 
                 # 显示原文
                 if self.subtitle_overlay:
@@ -132,12 +156,17 @@ class TranslatorApp:
                 else:
                     self.subtitle_overlay.update_status("⚠️ 翻译失败")
             else:
+                self._metrics['fail_count'] += 1
                 self.subtitle_overlay.update_status("🟢 就绪")
                 
         except Exception as e:
             print(f"处理错误: {e}")
             self.subtitle_overlay.update_status(f"❌ 错误: {str(e)[:30]}")
         finally:
+            try:
+                self._adapt_params()
+            except Exception:
+                pass
             self._processing = False
     
     def _on_gpu_status(self, status: GPUStatus):
@@ -151,6 +180,10 @@ class TranslatorApp:
                 "gpu_memory_used": status.memory_used,
                 "gpu_memory_total": status.memory_total
             })
+        try:
+            self._adapt_params(status)
+        except Exception:
+            pass
     
     def test_connections(self) -> bool:
         """测试与服务器的连接"""
@@ -194,6 +227,36 @@ class TranslatorApp:
         
         return all_ok
     
+    def _adapt_params(self, gpu_status: GPUStatus = None):
+        rec_list = self._metrics['rec_times']
+        if rec_list:
+            avg = sum(rec_list) / len(rec_list)
+        else:
+            avg = 0
+        fail = self._metrics['fail_count']
+        succ = self._metrics['success_count']
+        total = fail + succ if (fail + succ) > 0 else 1
+        fr = fail / total
+        force_interval = self.config.silence_duration
+        max_buf = self.config.max_buffer_duration
+        if avg > 1500:
+            max_buf = max(5.0, max_buf - 2.0)
+            force_interval = max(0.4, self.config.silence_duration - 0.1)
+        else:
+            max_buf = min(12.0, max_buf + 1.0)
+            force_interval = min(0.8, self.config.silence_duration + 0.05)
+        if fr > 0.1:
+            force_interval = min(0.9, force_interval + 0.1)
+        if gpu_status and gpu_status.available and gpu_status.utilization > 80:
+            force_interval = min(1.2, force_interval + 0.2)
+        self.config.max_buffer_duration = max_buf
+        self.config.silence_duration = force_interval
+        if self.audio_capture:
+            self.audio_capture.update_dynamic_params(
+                silence_duration=self.config.silence_duration,
+                max_buffer_duration=self.config.max_buffer_duration,
+                force_flush_interval=max(1.0, self.config.silence_duration)
+            )
     def run(self):
         """运行应用程序"""
         print("=" * 50)

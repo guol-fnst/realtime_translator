@@ -256,6 +256,12 @@ class SubtitleOverlay:
             'translated': text + "▌"  # 添加光标效果
         })
     
+    def update_original_streaming(self, text: str):
+        self._message_queue.put({
+            'type': 'subtitle',
+            'original': text + "▌"
+        })
+    
     def finalize_translated(self, original: str, translated: str):
         """
         完成流式翻译，移除光标

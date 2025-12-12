@@ -14,8 +14,8 @@ if exist dist rmdir /s /q dist
 if exist build rmdir /s /q build
 
 echo.
-echo [2/2] 打包程序...
-pyinstaller --noconfirm --onefile --windowed ^
+echo [2/2] 打包程序 (Console)...
+pyinstaller --noconfirm --onefile --console ^
     --name "JapaneseTranslator" ^
     --paths src ^
     --collect-all numpy ^
@@ -42,7 +42,7 @@ echo ========================================
 echo  打包完成!
 echo ========================================
 echo.
-echo 可执行文件位置: dist\JapaneseTranslator.exe
+echo 可执行文件位置: dist\JapaneseTranslator.exe (Console)
 echo.
 echo 注意: 首次运行可能需要较长时间解压
 echo.
