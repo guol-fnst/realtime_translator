@@ -26,7 +26,7 @@ from speech_recognition import SpeechRecognizer
 from translator import Translator
 from subtitle_overlay import SubtitleOverlay
 from sharing_server import SharingServer
-from gpu_monitor import GPUMonitor, GPUStatus
+
 
 
 class TranslatorApp:
@@ -41,7 +41,7 @@ class TranslatorApp:
         self.translator: Optional[Translator] = None
         self.subtitle_overlay: Optional[SubtitleOverlay] = None
         self.sharing_server: Optional[SharingServer] = None
-        self.gpu_monitor: Optional[GPUMonitor] = None
+
         
         # 状态
         self._running = False
@@ -89,8 +89,7 @@ class TranslatorApp:
         if self.config.sharing_enabled:
             self.sharing_server = SharingServer(port=self.config.sharing_port)
         
-        # GPU监控
-        self.gpu_monitor = GPUMonitor(update_interval=2.0)
+
     
     def _on_audio(self, audio_data: bytes):
         """音频数据回调"""
@@ -169,21 +168,7 @@ class TranslatorApp:
                 pass
             self._processing = False
     
-    def _on_gpu_status(self, status: GPUStatus):
-        """GPU状态回调"""
-        if self.subtitle_overlay:
-            self.subtitle_overlay.update_gpu_status(status.format_display())
-        
-        if self.sharing_server:
-            self.sharing_server.broadcast_status({
-                "gpu_utilization": status.utilization,
-                "gpu_memory_used": status.memory_used,
-                "gpu_memory_total": status.memory_total
-            })
-        try:
-            self._adapt_params(status)
-        except Exception:
-            pass
+
     
     def test_connections(self) -> bool:
         """测试与服务器的连接"""
@@ -213,21 +198,13 @@ class TranslatorApp:
             print("   ✗ 翻译服务不可用")
             all_ok = False
         
-        # 测试GPU
-        print("\n3. 测试GPU监控...")
-        status = self.gpu_monitor.get_status()
-        if status.available:
-            print(f"   ✓ GPU: {status.name}")
-            print(f"   利用率: {status.utilization}%")
-            print(f"   显存: {status.memory_used}MB / {status.memory_total}MB")
-        else:
-            print("   ⚠️ GPU监控不可用（可能是远程服务器）")
+
         
         print("\n" + "=" * 30)
         
         return all_ok
     
-    def _adapt_params(self, gpu_status: GPUStatus = None):
+    def _adapt_params(self):
         rec_list = self._metrics['rec_times']
         if rec_list:
             avg = sum(rec_list) / len(rec_list)
@@ -247,8 +224,6 @@ class TranslatorApp:
             force_interval = min(0.8, self.config.silence_duration + 0.05)
         if fr > 0.1:
             force_interval = min(0.9, force_interval + 0.1)
-        if gpu_status and gpu_status.available and gpu_status.utilization > 80:
-            force_interval = min(1.2, force_interval + 0.2)
         self.config.max_buffer_duration = max_buf
         self.config.silence_duration = force_interval
         if self.audio_capture:
@@ -277,8 +252,7 @@ class TranslatorApp:
             self.sharing_server.start()
             print(f"\n共享地址: {self.sharing_server.get_connection_info()}")
         
-        # 启动GPU监控
-        self.gpu_monitor.start(callback=self._on_gpu_status)
+
         
         # 启动音频捕获
         print("\n开始捕获系统音频...")
@@ -303,8 +277,7 @@ class TranslatorApp:
         if self.audio_capture:
             self.audio_capture.stop()
         
-        if self.gpu_monitor:
-            self.gpu_monitor.stop()
+
         
         if self.sharing_server:
             self.sharing_server.stop()

@@ -18,7 +18,6 @@ class SubtitleContent:
     """字幕内容"""
     original: str = ""  # 原文
     translated: str = ""  # 翻译
-    gpu_status: str = ""  # GPU状态
 
 
 class SubtitleOverlay:
@@ -52,7 +51,7 @@ class SubtitleOverlay:
         # UI元素
         self._original_label: Optional[tk.Label] = None
         self._translated_label: Optional[tk.Label] = None
-        self._gpu_label: Optional[tk.Label] = None
+
         self._status_label: Optional[tk.Label] = None
         
         # 拖拽相关
@@ -118,16 +117,7 @@ class SubtitleOverlay:
         # 绑定提示
         self._create_tooltip(save_btn, "保存字幕记录")
         
-        # GPU状态
-        self._gpu_label = tk.Label(
-            main_frame,
-            text="GPU: --",
-            bg=bg_color,
-            fg='#0f3460',
-            font=('Consolas', 9),
-            anchor='w'
-        )
-        self._gpu_label.pack(fill='x', pady=(0, 5))
+
         
         # 原文标签
         if self.show_original:
@@ -202,9 +192,7 @@ class SubtitleOverlay:
                     if self._translated_label and msg.get('translated'):
                         self._translated_label.config(text=msg['translated'])
                         
-                elif msg.get('type') == 'gpu':
-                    if self._gpu_label:
-                        self._gpu_label.config(text=msg.get('status', ''))
+
                         
                 elif msg.get('type') == 'status':
                     if self._status_label:
@@ -230,12 +218,7 @@ class SubtitleOverlay:
             'translated': translated
         })
     
-    def update_gpu_status(self, status: str):
-        """更新GPU状态"""
-        self._message_queue.put({
-            'type': 'gpu',
-            'status': status
-        })
+
     
     def update_status(self, text: str):
         """更新状态文本"""
@@ -399,7 +382,7 @@ if __name__ == "__main__":
     
     for i, (jp, cn) in enumerate(test_subtitles):
         overlay.update_subtitle(jp, cn)
-        overlay.update_gpu_status(f"GPU: {30 + i * 10}% | 显存: 4GB/20GB")
+
         overlay.update_status(f"🟢 正在翻译... ({i+1}/{len(test_subtitles)})")
         time.sleep(3)
     
